@@ -136,7 +136,7 @@ export async function mintCompletion(
     args: [to, kind, uri, name],
     chainId: MEDIX_CONTRACT.chainId,
     account,
-    gas: 1500000n, // Increased from 500k to 1.5M to handle storage operations and metadata encoding
+    gas: 1000000n, // Increased from 500k to 1.0M to handle storage operations and metadata encoding
   });
   
   console.log('[NFT] Transaction sent, hash:', hash);
