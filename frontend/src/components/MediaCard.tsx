@@ -9,6 +9,7 @@ const mediaIcons: Record<MediaType, typeof Book> = {
   manga: BookOpen,
   comic: Newspaper,
   tvshow: Tv,
+  video: Play, // YouTube videos
 };
 
 const mediaBadgeClass: Record<MediaType, string> = {
@@ -18,6 +19,7 @@ const mediaBadgeClass: Record<MediaType, string> = {
   manga: "badge-manga",
   comic: "badge-comic",
   tvshow: "badge-tvshow",
+  video: "badge-movie", // Use movie badge style for videos
 };
 
 interface MediaCardProps {

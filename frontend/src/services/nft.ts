@@ -29,7 +29,11 @@ export function mapTrackedType(type: string): number {
   if (type === "comic") return 4;
   if (type === "manga") return 5;
   if (type === "tvshow") return 6;
-  return 0;
+  if (type === "video") return 2; // Map video to Movie type
+  
+  // Default to Movie for unknown types to prevent kind=0 rejection
+  console.warn(`[NFT] Unknown media type "${type}", defaulting to Movie`);
+  return 2;
 }
 
 export async function readUserNfts(user: HexAddress): Promise<bigint[]> {

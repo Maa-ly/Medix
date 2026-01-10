@@ -5,7 +5,8 @@ export type MediaType =
   | "anime"
   | "manga"
   | "comic"
-  | "tvshow";
+  | "tvshow"
+  | "video"; // YouTube and other video platforms (maps to Movie in contract)
 
 export interface MediaItem {
   id: string;

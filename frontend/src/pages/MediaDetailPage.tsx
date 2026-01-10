@@ -27,6 +27,7 @@ const mediaIcons: Record<MediaType, typeof Book> = {
   manga: BookOpen,
   comic: Newspaper,
   tvshow: Tv,
+  video: Play, // YouTube videos
 };
 
 // Mock data - in real app this would come from API
