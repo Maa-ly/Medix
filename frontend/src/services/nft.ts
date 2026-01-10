@@ -123,6 +123,8 @@ export async function mintCompletion(
   const formattedPk = pk.startsWith("0x") ? pk : `0x${pk}`;
   const account = privateKeyToAccount(formattedPk as `0x${string}`);
 
+  console.log('[NFT] Minting with params:', { to, kind, uri: uri.substring(0, 100) + '...', name });
+
   const hash = await writeContract(wagmiConfig, {
     address: MEDIX_CONTRACT.address as HexAddress,
     abi: MEDIX_ABI,
@@ -132,13 +134,40 @@ export async function mintCompletion(
     account,
     gas: 500000n, // Increase gas limit to prevent out of gas errors
   });
-  const receipt = await waitForTransactionReceipt(wagmiConfig, {
-    hash,
-    chainId: MEDIX_CONTRACT.chainId,
-    confirmations: 1,
-    pollingInterval: 2000, // Poll every 2 seconds
-  });
-  return { hash, receipt };
+  
+  console.log('[NFT] Transaction sent, hash:', hash);
+  
+  // Wait for transaction using simpler method to avoid RPC limitations
+  // Use timeout and retryCount to handle "block is out of range" errors
+  try {
+    const receipt = await waitForTransactionReceipt(wagmiConfig, {
+      hash,
+      chainId: MEDIX_CONTRACT.chainId,
+      confirmations: 1,
+      pollingInterval: 3000, // Poll every 3 seconds (slower to avoid rate limits)
+      timeout: 120_000, // 2 minutes timeout
+      retryCount: 10, // Retry up to 10 times
+    });
+    
+    console.log('[NFT] Transaction receipt:', receipt);
+    
+    // Check if transaction succeeded
+    if (receipt.status === 'reverted') {
+      console.error('[NFT] Transaction REVERTED!', {
+        hash,
+        gasUsed: receipt.gasUsed,
+        logs: receipt.logs,
+      });
+      throw new Error(`Transaction reverted. View on explorer: https://sepolia-blockscout.lisk.com/tx/${hash}`);
+    }
+    
+    console.log('[NFT] Transaction SUCCEEDED!');
+    return { hash, receipt };
+  } catch (error) {
+    // If receipt fails, return hash anyway - transaction might still succeed
+    console.warn('[NFT] Could not get receipt, but transaction was sent:', error);
+    return { hash, receipt: null };
+  }
 }
 
 export async function getGroupMemberCount(mediaId: Hex): Promise<bigint> {
