@@ -1,0 +1,228 @@
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import type {
+  User,
+  CompletionNFT,
+  Toast,
+  BackendUser,
+} from "@/types";
+
+// Tracked media item
+export interface TrackedMedia {
+  id: string;
+  platform: string;
+  type: string;
+  title: string;
+  url: string;
+  progress: number;
+  duration?: number;
+  startTime: number;
+  lastUpdate: number;
+  watchTime: number;
+  completed: boolean;
+  thumbnail?: string;
+}
+
+// Auth type to track which auth method is used
+type AuthMethod = "walletconnect" | null;
+
+interface AppState {
+  // Auth State
+  isConnected: boolean;
+  isLoading: boolean;
+  isConnecting: boolean;
+  authMethod: AuthMethod;
+  walletAddress: string | null;
+  address: string | null; // Current wallet address from wagmi
+  joinedAt: string | null; // ISO date string when user first joined
+
+  // User Data
+  user: User | null;
+  backendUser: BackendUser | null; // User data from our backend (Prisma)
+  completions: CompletionNFT[];
+
+  // Tracking State
+  trackingEnabled: boolean;
+  trackingPermissionAsked: boolean;
+  activeTracking: TrackedMedia[];
+  pendingMints: TrackedMedia[];
+
+  // UI State
+  toasts: Toast[];
+
+  // Actions
+  setConnected: (connected: boolean) => void;
+  setLoading: (loading: boolean) => void;
+  setConnecting: (connecting: boolean) => void;
+  setAuthMethod: (method: AuthMethod) => void;
+  setWalletAddress: (address: string | null) => void;
+  setAddress: (address: string | null) => void;
+  setJoinedAt: (date: string) => void;
+  setBackendUser: (user: BackendUser | null) => void;
+  updateBackendUserImage: (imageUrl: string) => void;
+  setUser: (user: User | null) => void;
+  setCompletions: (completions: CompletionNFT[]) => void;
+  addCompletion: (completion: CompletionNFT) => void;
+
+  // Tracking Actions
+  setTrackingEnabled: (enabled: boolean) => void;
+  setTrackingPermissionAsked: (asked: boolean) => void;
+  updateActiveTracking: (media: TrackedMedia) => void;
+  removeActiveTracking: (id: string) => void;
+  addPendingMint: (media: TrackedMedia) => void;
+  removePendingMint: (id: string) => void;
+  clearActiveTracking: () => void;
+
+  // Toast Actions
+  addToast: (toast: Omit<Toast, "id">) => void;
+  removeToast: (id: string) => void;
+
+  // Reset
+  logout: () => void;
+}
+
+export const useAppStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      // Initial State
+      isConnected: false,
+      isLoading: false,
+      isConnecting: false,
+      authMethod: null,
+      walletAddress: null,
+      address: null,
+      joinedAt: null,
+      user: null,
+      backendUser: null,
+      completions: [],
+      trackingEnabled: true,
+      trackingPermissionAsked: false,
+      activeTracking: [],
+      pendingMints: [],
+      toasts: [],
+
+      // Auth Actions
+      setConnected: (connected) => set({ isConnected: connected }),
+      setLoading: (loading) => set({ isLoading: loading }),
+      setConnecting: (connecting) => set({ isConnecting: connecting }),
+      setAuthMethod: (method) => set({ authMethod: method }),
+      setBackendUser: (user) => set({ backendUser: user }),
+      updateBackendUserImage: (imageUrl) =>
+        set((state) => ({
+          backendUser: state.backendUser
+            ? { ...state.backendUser, profileImage: imageUrl }
+            : null,
+        })),
+      setWalletAddress: (address) =>
+        set((state) => ({
+          walletAddress: address,
+          joinedAt:
+            address && !state.joinedAt ? new Date().toISOString() : state.joinedAt,
+        })),
+      setAddress: (address) => set({ address }),
+      setJoinedAt: (date) => set({ joinedAt: date }),
+
+      // User Actions
+      setUser: (user) => set({ user }),
+      setCompletions: (completions) => set({ completions }),
+      addCompletion: (completion) =>
+        set((state) => ({
+          completions: [...state.completions, completion],
+        })),
+
+      // Tracking Actions
+      setTrackingEnabled: (enabled) => set({ trackingEnabled: enabled }),
+      setTrackingPermissionAsked: (asked) =>
+        set({ trackingPermissionAsked: asked }),
+      updateActiveTracking: (media) =>
+        set((state) => {
+          // Find by ID or by URL (to prevent duplicates)
+          const existing = state.activeTracking.findIndex(
+            (m) => m.id === media.id || m.url === media.url
+          );
+          if (existing >= 0) {
+            const updated = [...state.activeTracking];
+            const prev = updated[existing];
+            const next = {
+              ...prev,
+              // Only override fields when the incoming value is not undefined
+              platform: media.platform ?? prev.platform,
+              type: media.type ?? prev.type,
+              title: media.title ?? prev.title,
+              url: media.url ?? prev.url,
+              progress: media.progress ?? prev.progress,
+              duration: media.duration ?? prev.duration,
+              startTime: media.startTime ?? prev.startTime,
+              lastUpdate: media.lastUpdate ?? prev.lastUpdate,
+              watchTime: media.watchTime ?? prev.watchTime,
+              completed: media.completed ?? prev.completed,
+              thumbnail: media.thumbnail ?? prev.thumbnail,
+              id: prev.id,
+            };
+            updated[existing] = next;
+            return { activeTracking: updated };
+          }
+          return { activeTracking: [...state.activeTracking, media] };
+        }),
+      removeActiveTracking: (id) =>
+        set((state) => ({
+          activeTracking: state.activeTracking.filter((m) => m.id !== id),
+        })),
+      addPendingMint: (media) =>
+        set((state) => ({
+          pendingMints: [...state.pendingMints, { ...media, completed: true }],
+        })),
+      removePendingMint: (id) =>
+        set((state) => ({
+          pendingMints: state.pendingMints.filter((m) => m.id !== id),
+        })),
+      clearActiveTracking: () => set({ activeTracking: [] }),
+
+      // Toast Actions
+      addToast: (toast) => {
+        const id = Math.random().toString(36).substring(7);
+        set((state) => ({
+          toasts: [...state.toasts, { ...toast, id }],
+        }));
+
+        // Auto remove after duration
+        setTimeout(() => {
+          get().removeToast(id);
+        }, toast.duration || 5000);
+      },
+      removeToast: (id) =>
+        set((state) => ({
+          toasts: state.toasts.filter((t) => t.id !== id),
+        })),
+
+      // Logout
+      logout: () =>
+        set({
+          isConnected: false,
+          authMethod: null,
+          walletAddress: null,
+          joinedAt: null,
+          user: null,
+          backendUser: null,
+          completions: [],
+          activeTracking: [],
+          pendingMints: [],
+        }),
+    }),
+    {
+      name: "medix-storage",
+      partialize: (state) => ({
+        isConnected: state.isConnected,
+        authMethod: state.authMethod,
+        walletAddress: state.walletAddress,
+        joinedAt: state.joinedAt,
+        backendUser: state.backendUser,
+        completions: state.completions,
+        trackingEnabled: state.trackingEnabled,
+        trackingPermissionAsked: state.trackingPermissionAsked,
+        activeTracking: state.activeTracking,
+        pendingMints: state.pendingMints,
+      }),
+    }
+  )
+);
