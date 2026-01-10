@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { ChevronDown, LogOut, Copy, Check } from "lucide-react";
+import { ChevronDown, LogOut, Copy, Check, Loader2 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { useNavigate } from "react-router-dom";
 import { useAccount, useDisconnect } from "wagmi";
@@ -11,10 +11,10 @@ import { LogoIcon, WalletImageIcon } from "./AppIcons";
 const isExtension = typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id;
 
 export function Header() {
-  const { address, isConnected } = useAccount();
+  const { address: wagmiAddress, isConnected: wagmiIsConnected } = useAccount();
   const { open } = useWeb3Modal();
   const { disconnect } = useDisconnect();
-  const { addToast, logout } = useAppStore();
+  const { addToast, logout, isConnecting, isConnected: storeIsConnected, address: storeAddress } = useAppStore();
 
   const [showDropdown, setShowDropdown] = useState(false);
   const [copiedWallet, setCopiedWallet] = useState(false);
@@ -36,10 +36,17 @@ export function Header() {
   }, [showDropdown]);
 
   const handleConnect = async () => {
-    // In extension, open modal in the current window
     if (isExtension) {
-      await open({ view: "Connect" });
+      // Determine auth URL based on environment
+      // In production, use vercel deployment; in development, use localhost
+      const authUrl = window.location.hostname.includes('vercel.app')
+        ? 'https://medixx.vercel.app/auth.html'
+        : 'http://localhost:5173/auth.html';
+
+      console.log('[Header] Opening auth page:', authUrl);
+      chrome.tabs.create({ url: authUrl });
     } else {
+      // Web app uses Web3Modal directly
       await open();
     }
   };
@@ -56,15 +63,17 @@ export function Header() {
   };
 
   const copyWalletAddress = () => {
-    if (address) {
-      navigator.clipboard.writeText(address);
+    const addr = isExtension ? storeAddress : wagmiAddress;
+    if (addr) {
+      navigator.clipboard.writeText(addr);
       setCopiedWallet(true);
       setTimeout(() => setCopiedWallet(false), 2000);
+      addToast({ type: "success", message: `Copied ${formatAddress(addr)}` });
     }
   };
 
   const formatAddress = (addr: string) => {
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+    return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
   };
 
   return (
@@ -87,13 +96,23 @@ export function Header() {
 
           <div className="flex items-center gap-4">
 
-            {!isConnected ? (
+            {!(isExtension ? storeIsConnected : wagmiIsConnected) ? (
               <button
                 onClick={handleConnect}
-                className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-coral text-white font-semibold rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2"
+                disabled={isConnecting}
+                className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-coral text-white font-semibold rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
               >
-                <WalletImageIcon size={20} inverted={false} />
-                {isExtension ? "Connect" : "Connect Wallet"}
+                {isConnecting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    {isExtension ? "Connecting..." : "Connecting Wallet..."}
+                  </>
+                ) : (
+                  <>
+                    <WalletImageIcon size={20} inverted={false} />
+                    {isExtension ? "Connect" : "Connect Wallet"}
+                  </>
+                )}
               </button>
             ) : (
               <div className="relative" ref={dropdownRef}>
@@ -102,20 +121,19 @@ export function Header() {
                   className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all backdrop-blur-sm"
                 >
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-coral flex items-center justify-center text-white text-sm font-bold">
-                    {address ? address.slice(2, 4).toUpperCase() : "M"}
+                    {(isExtension ? storeAddress : wagmiAddress) ? (isExtension ? storeAddress! : wagmiAddress!).slice(-2).toUpperCase() : "M"}
                   </div>
-                  <div className="text-sm font-mono text-white hidden sm:block">
-                    {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ""}
+                  <div className={`text-sm font-mono text-white ${isExtension ? "" : "hidden sm:block"}`}>
+                    {(isExtension ? storeAddress : wagmiAddress) ? formatAddress((isExtension ? storeAddress! : wagmiAddress!) as string) : ""}
                   </div>
                   <ChevronDown
-                    className={`w-4 h-4 text-gray-400 transition-transform ${
-                      showDropdown ? "rotate-180" : ""
-                    }`}
+                    className={`w-4 h-4 text-gray-400 transition-transform ${showDropdown ? "rotate-180" : ""
+                      }`}
                   />
                 </button>
 
                 {showDropdown && (
-                  <div 
+                  <div
                     className="absolute right-0 mt-2 w-64 glass-dark rounded-xl shadow-xl overflow-hidden"
                   >
                     <div className="p-4 border-b border-dark-700/50">
@@ -124,7 +142,7 @@ export function Header() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-white font-mono text-sm">
-                          {address ? formatAddress(address) : ""}
+                          {(isExtension ? storeAddress : wagmiAddress) ? formatAddress((isExtension ? storeAddress! : wagmiAddress!) as string) : ""}
                         </span>
                         <button
                           onClick={copyWalletAddress}

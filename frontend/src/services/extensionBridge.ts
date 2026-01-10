@@ -69,6 +69,12 @@ export const saveSessionToStorage = (sessionData: SessionData): void => {
   try {
     localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(sessionData));
     localStorage.setItem(STORAGE_KEYS.LAST_SYNC, Date.now().toString());
+    if (typeof chrome !== "undefined" && chrome.storage?.local) {
+      chrome.storage.local.set({
+        [STORAGE_KEYS.SESSION]: sessionData,
+        [STORAGE_KEYS.LAST_SYNC]: Date.now(),
+      });
+    }
   } catch (error) {
     console.error(
       "[ExtensionBridge] Failed to save session to storage:",
@@ -91,6 +97,21 @@ export const getSessionFromStorage = (): SessionData | null => {
       "[ExtensionBridge] Failed to get session from storage:",
       error
     );
+  }
+  return null;
+};
+
+export const getSessionFromChromeStorage = async (): Promise<SessionData | null> => {
+  try {
+    if (typeof chrome !== "undefined" && chrome.storage?.local) {
+      const result = await new Promise<Record<string, any>>((resolve) => {
+        chrome.storage.local.get([STORAGE_KEYS.SESSION], (r) => resolve(r));
+      });
+      const value = result[STORAGE_KEYS.SESSION];
+      return value ?? null;
+    }
+  } catch (error) {
+    console.error("[ExtensionBridge] Failed to get session from chrome.storage:", error);
   }
   return null;
 };

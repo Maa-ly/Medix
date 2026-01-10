@@ -1,79 +1,81 @@
-// Content script for Medix auth page
-// Relays Wepin authentication from auth page to background script
-// NOTE: This is ONLY for Wepin auth via localhost/auth page
-// VeryChat authentication happens directly in the extension popup
+/**
+ * Auth Relay Content Script
+ * Runs on auth.html pages (localhost:5173 and medixx.vercel.app) to relay session data to extension
+ */
 
-console.log("[Medix Auth Relay] Script loaded for Wepin auth only");
+console.log("[Auth Relay] Content script loaded");
 
-// Listen for postMessage from auth page
-window.addEventListener("message", (event) => {
-  // Only accept messages from same origin
-  if (event.origin !== window.location.origin) {
-    return;
-  }
+// Listen for storage changes in the page
+window.addEventListener("storage", (event) => {
+  if (event.key === "medix_session" && event.newValue) {
+    try {
+      const sessionData = JSON.parse(event.newValue);
+      console.log("[Auth Relay] Detected session update in localStorage:", sessionData);
 
-  console.log("[Medix Auth Content] Received message:", event.data);
-
-  // Check if it's a Wepin auth success message
-  if (
-    event.data?.type === "WEPIN_AUTH_SUCCESS" &&
-    event.data?.source === "medix-auth"
-  ) {
-    // Validate it's actually a Wepin session (not VeryChat)
-    if (event.data.data?.authMethod !== "wepin") {
-      console.warn(
-        "[Medix Auth Relay] Ignoring non-Wepin auth:",
-        event.data.data?.authMethod
-      );
-      return;
+      // Send to extension background
+      chrome.runtime.sendMessage({
+        type: "SESSION_UPDATED",
+        data: sessionData,
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.log("[Auth Relay] Error sending message:", chrome.runtime.lastError);
+        } else {
+          console.log("[Auth Relay] Session relayed to extension:", response);
+        }
+      });
+    } catch (error) {
+      console.error("[Auth Relay] Error parsing session data:", error);
     }
-
-    console.log(
-      "[Medix Auth Relay] Wepin auth success, relaying to background"
-    );
-
-    // Send to background script
-    chrome.runtime.sendMessage(
-      {
-        type: "WEPIN_AUTH_SUCCESS",
-        data: event.data.data,
-      },
-      (response) => {
-        console.log("[Medix Auth Relay] Background response:", response);
-      }
-    );
   }
 });
 
-// Poll localStorage for session data (backup method)
-let pollCount = 0;
-const maxPolls = 20; // 10 seconds max
-const pollInterval = setInterval(() => {
-  pollCount++;
-
-  const session = localStorage.getItem("medix_wepin_session");
-  if (session) {
-    console.log("[Medix Auth Content] Found session in localStorage");
-    clearInterval(pollInterval);
-
+// Also check for session on page load
+setTimeout(() => {
+  const sessionStr = localStorage.getItem("medix_session");
+  if (sessionStr) {
     try {
-      const sessionData = JSON.parse(session);
-      chrome.runtime.sendMessage(
-        {
-          type: "WEPIN_AUTH_SUCCESS",
+      const sessionData = JSON.parse(sessionStr);
+      if (sessionData.isConnected) {
+        console.log("[Auth Relay] Found existing session on load:", sessionData);
+
+        // Send to extension background
+        chrome.runtime.sendMessage({
+          type: "SESSION_UPDATED",
           data: sessionData,
-        },
-        (response) => {
-          console.log("[Medix Auth Content] Session synced:", response);
-        }
-      );
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log("[Auth Relay] Error sending message:", chrome.runtime.lastError);
+          } else {
+            console.log("[Auth Relay] Session relayed to extension:", response);
+          }
+        });
+      }
     } catch (error) {
-      console.error("[Medix Auth Content] Failed to parse session:", error);
+      console.error("[Auth Relay] Error parsing session data:", error);
     }
   }
+}, 1000); // Wait 1 second for page to fully load
 
-  if (pollCount >= maxPolls) {
-    clearInterval(pollInterval);
-    console.log("[Medix Auth Content] Polling stopped");
+// Listen for messages from the page (auth.tsx)
+window.addEventListener("message", (event) => {
+  // Only accept messages from same origin
+  if (event.origin !== window.location.origin) return;
+
+  if (event.data.type === "SESSION_UPDATED" && event.data.source === "medix-auth") {
+    console.log("[Auth Relay] Received session update from page:", event.data.data);
+
+    // Forward to extension background
+    chrome.runtime.sendMessage({
+      type: "SESSION_UPDATED",
+      data: event.data.data,
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.log("[Auth Relay] Error sending message:", chrome.runtime.lastError);
+      } else {
+        console.log("[Auth Relay] Session relayed to extension:", response);
+      }
+    });
   }
-}, 500);
+});
+
+console.log("[Auth Relay] Listening for session updates...");

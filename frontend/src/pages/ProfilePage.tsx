@@ -16,6 +16,7 @@ import {
   Tv,
   Play,
   BookOpen,
+  Newspaper,
   ChevronRight,
   Loader2,
 } from "lucide-react";
@@ -26,13 +27,14 @@ const statIcons = {
   book: Book,
   movie: Film,
   anime: Play,
+  comic: Newspaper,
   manga: BookOpen,
   tvshow: Tv,
 };
 
 export function ProfilePage() {
   const navigate = useNavigate();
-  const { address } = useAccount();
+  const { address: wagmiAddress } = useAccount();
   const {
     isConnected,
     authMethod,
@@ -43,6 +45,7 @@ export function ProfilePage() {
     updateBackendUserImage,
     addToast,
     logout,
+    address: storeAddress,
   } = useAppStore();
 
   const [copied, setCopied] = useState(false);
@@ -63,10 +66,10 @@ export function ProfilePage() {
 
       try {
         let authId: string | null = null;
-        
-        // For WalletConnect, use the wallet address as authId
-        if (address) {
-          authId = address;
+
+        const effectiveAddress = storeAddress || wagmiAddress || null;
+        if (effectiveAddress) {
+          authId = effectiveAddress;
         }
 
         if (authId && authMethod) {
@@ -89,9 +92,8 @@ export function ProfilePage() {
       }
     };
 
-    // Always refetch on mount to get latest profile data
     fetchBackendUser();
-  }, [isConnected, authMethod, address, backendUser, setBackendUser, addToast]);
+  }, [isConnected, authMethod, wagmiAddress, storeAddress, backendUser, setBackendUser, addToast]);
 
   // Load saved profile image from localStorage on mount (fallback if no backend image)
   useEffect(() => {
@@ -102,9 +104,10 @@ export function ProfilePage() {
     }
 
     // Fallback to localStorage
-    const storageKey = address
-        ? `profileImage_${address}`
-        : null;
+    const effectiveAddress = storeAddress || wagmiAddress || null;
+    const storageKey = effectiveAddress
+      ? `profileImage_${effectiveAddress}`
+      : null;
 
     if (storageKey) {
       const savedImage = localStorage.getItem(storageKey);
@@ -114,7 +117,8 @@ export function ProfilePage() {
     }
   }, [
     authMethod,
-    address,
+    wagmiAddress,
+    storeAddress,
     backendUser?.profileImage,
   ]);
 
@@ -122,11 +126,10 @@ export function ProfilePage() {
   const displayName = backendUser?.profileName || "Lisk User";
 
   // Get profile ID for display
-  const profileId = address
-      ? `${address.slice(0, 8)}...${address.slice(
-          -6
-        )}`
-      : null;
+  const effectiveAddress = storeAddress || wagmiAddress || null;
+  const profileId = effectiveAddress
+    ? `${effectiveAddress.slice(0, 8)}...${effectiveAddress.slice(-6)}`
+    : null;
 
   // Format join date
   const formatJoinDate = (dateString: string | null) => {
@@ -137,8 +140,8 @@ export function ProfilePage() {
 
 
   const handleCopyAddress = () => {
-    if (address) {
-      navigator.clipboard.writeText(address);
+    if (effectiveAddress) {
+      navigator.clipboard.writeText(effectiveAddress);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -204,9 +207,9 @@ export function ProfilePage() {
         } catch (backendError) {
           console.error("[ProfilePage] Backend upload error:", backendError);
           // Fallback to localStorage if backend fails
-          const storageKey = address
-              ? `profileImage_${address}`
-              : null;
+          const storageKey = effectiveAddress
+            ? `profileImage_${effectiveAddress}`
+            : null;
 
           if (storageKey) {
             const base64 = await new Promise<string>((resolve) => {
@@ -227,11 +230,11 @@ export function ProfilePage() {
           "[ProfilePage] No backend user found! Saving to localStorage only."
         );
         console.log("[ProfilePage] Auth method:", authMethod);
-        console.log("[ProfilePage] Current account:", address);
+        console.log("[ProfilePage] Current account:", effectiveAddress);
 
-        const storageKey = address
-            ? `profileImage_${address}`
-            : null;
+        const storageKey = effectiveAddress
+          ? `profileImage_${effectiveAddress}`
+          : null;
 
         if (storageKey) {
           const base64 = await new Promise<string>((resolve) => {
@@ -393,7 +396,7 @@ export function ProfilePage() {
           <div className="flex flex-col items-center gap-1 text-sm text-dark-400 mb-4">
             <div className="flex items-center gap-2">
               <span className="font-mono">{profileId}</span>
-              {address && (
+              {effectiveAddress && (
                 <button
                   onClick={handleCopyAddress}
                   className="p-1 rounded hover:bg-dark-700 transition-colors"
@@ -431,8 +434,8 @@ export function ProfilePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-5 gap-2">
-          {(["book", "movie", "anime", "manga", "tvshow"] as const).map(
+        <div className="grid grid-cols-6 gap-2">
+          {(["book", "movie", "anime", "comic", "manga", "tvshow"] as const).map(
             (type) => {
               const Icon = statIcons[type];
               const count = typeStats[type] || 0;
@@ -446,9 +449,8 @@ export function ProfilePage() {
                 `}
                   >
                     <Icon
-                      className={`w-5 h-5 ${
-                        count > 0 ? "text-coral" : "text-dark-500"
-                      }`}
+                      className={`w-5 h-5 ${count > 0 ? "text-coral" : "text-dark-500"
+                        }`}
                     />
                   </div>
                   <p className="text-sm font-bold text-white">{count}</p>

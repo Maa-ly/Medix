@@ -76,8 +76,6 @@ export function CommunityPage() {
     setCopiedUserId(userId);
     addToast({ type: "success", message: `Copied ${textToCopy}!` });
     setTimeout(() => setCopiedUserId(null), 2000);
-    addToast({ type: "success", message: "Copied wallet address!" });
-    setTimeout(() => setCopiedUserId(null), 2000);
   };
 
   const openShareModal = (group: Group, e: React.MouseEvent) => {

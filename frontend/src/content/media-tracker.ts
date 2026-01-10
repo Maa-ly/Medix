@@ -1290,7 +1290,7 @@ function startActivityTracking() {
         // and the page appears to be ending (e.g., credits, next episode prompt)
         const completionIndicators = document.querySelectorAll(
           '[class*="credits"], [class*="next-episode"], [class*="ended"], [class*="finished"], ' +
-            '[class*="complete"], .end-credits, .next-up'
+          '[class*="complete"], .end-credits, .next-up'
         );
 
         if (
@@ -1415,9 +1415,8 @@ function parseMangaDexResponse(
     return {
       title:
         chapter.attributes.title || `Chapter ${chapter.attributes.chapter}`,
-      chapter: `Vol. ${chapter.attributes.volume || "?"} Ch. ${
-        chapter.attributes.chapter
-      }`,
+      chapter: `Vol. ${chapter.attributes.volume || "?"} Ch. ${chapter.attributes.chapter
+        }`,
       type: "manga",
     };
   } catch (error) {
@@ -2168,7 +2167,7 @@ function updateTracking() {
     const isNearEnd =
       mediaInfo.duration && mediaInfo.duration > 0
         ? progress >= 90 ||
-          mediaInfo.duration - (progress / 100) * mediaInfo.duration < 30
+        mediaInfo.duration - (progress / 100) * mediaInfo.duration < 30
         : progress >= 90;
 
     if (isNearEnd && !currentSession.completed) {
@@ -2505,7 +2504,7 @@ function setupExtensionBridge() {
       if (
         (message.type === MESSAGE_TYPES.SESSION_DATA ||
           message.type === "SESSION_SYNC") &&
-        message.authMethod === "walletconnect"
+        message.data?.authMethod === "walletconnect"
       ) {
         console.log(
           "[Medix Bridge] Saving WalletConnect session to chrome.storage:",
@@ -2547,7 +2546,7 @@ function setupExtensionBridge() {
       } else if (
         (message.type === MESSAGE_TYPES.SESSION_DATA ||
           message.type === "SESSION_SYNC") &&
-        message.authMethod !== "walletconnect"
+        message.data?.authMethod !== "walletconnect"
       ) {
         // Reject non-WalletConnect sessions from web page
         console.log(

@@ -25,7 +25,9 @@ export function showToast(message: string, type: ToastType = "success"): void {
 
   const toast = document.createElement("div");
   toast.className = `medix-toast medix-toast-${type}`;
-  toast.textContent = message;
+  const normalized = String(message || "").replace(/\s+/g, " ").trim();
+  const max = 120;
+  toast.textContent = normalized.length > max ? normalized.slice(0, max - 1) + "…" : normalized;
   document.body.appendChild(toast);
 
   // Auto-remove after 2 seconds

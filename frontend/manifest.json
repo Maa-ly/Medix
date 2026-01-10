@@ -67,19 +67,25 @@
         "https://*.mangadex.org/chapter/*",
         "https://*.myanimelist.net/anime/*",
         "https://*.anilist.co/anime/*",
-        "http://localhost/*",
+        "http://localhost:5173/*",
+        "https://medixx.vercel.app/*",
         "https://*.medix.io/*",
         "https://*.vercel.app/*"
       ],
-      "js": ["src/content/media-tracker.ts"],
+      "js": [
+        "src/content/media-tracker.ts"
+      ],
       "run_at": "document_idle"
     },
     {
       "matches": [
         "http://localhost:5173/auth*",
+        "https://medixx.vercel.app/auth*",
         "https://*.vercel.app/auth*"
       ],
-      "js": ["src/content/auth-relay.ts"],
+      "js": [
+        "src/content/auth-relay.ts"
+      ],
       "run_at": "document_start"
     }
   ],
@@ -90,13 +96,19 @@
     "matches": [
       "http://localhost:*/*",
       "https://localhost:*/*",
+      "https://medixx.vercel.app/*",
       "https://*.vercel.app/*"
     ]
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "auth.html"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "icons/*",
+        "auth.html"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

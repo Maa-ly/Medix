@@ -11,6 +11,7 @@ import {
   Tv,
   Play,
   BookOpen,
+  Newspaper,
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { NFTCard, NFTCardSkeleton } from "@/components/NFTCard";
@@ -68,6 +69,7 @@ const typeFilters = [
   { type: "book", label: "Books", icon: Book },
   { type: "movie", label: "Movies", icon: Film },
   { type: "anime", label: "Anime", icon: Play },
+  { type: "comic", label: "Comics", icon: Newspaper },
   { type: "manga", label: "Manga", icon: BookOpen },
   { type: "tvshow", label: "TV", icon: Tv },
 ];
@@ -139,14 +141,14 @@ export function CollectionPage() {
                 m.kind === 1
                   ? "book"
                   : m.kind === 2
-                  ? "movie"
-                  : m.kind === 3
-                  ? "anime"
-                  : m.kind === 4
-                  ? "comic"
-                  : m.kind === 5
-                  ? "manga"
-                  : "tvshow",
+                    ? "movie"
+                    : m.kind === 3
+                      ? "anime"
+                      : m.kind === 4
+                        ? "comic"
+                        : m.kind === 5
+                          ? "manga"
+                          : "tvshow",
               description,
               coverImage,
               releaseYear: new Date().getFullYear(),
@@ -263,21 +265,19 @@ export function CollectionPage() {
         <div className="flex items-center gap-2 p-1 bg-dark-800 rounded-lg">
           <button
             onClick={() => setViewMode("grid")}
-            className={`p-2 rounded-md transition-colors ${
-              viewMode === "grid"
-                ? "bg-coral text-white"
-                : "text-dark-400 hover:text-white"
-            }`}
+            className={`p-2 rounded-md transition-colors ${viewMode === "grid"
+              ? "bg-coral text-white"
+              : "text-dark-400 hover:text-white"
+              }`}
           >
             <Grid3X3 className="w-4 h-4" />
           </button>
           <button
             onClick={() => setViewMode("list")}
-            className={`p-2 rounded-md transition-colors ${
-              viewMode === "list"
-                ? "bg-coral text-white"
-                : "text-dark-400 hover:text-white"
-            }`}
+            className={`p-2 rounded-md transition-colors ${viewMode === "list"
+              ? "bg-coral text-white"
+              : "text-dark-400 hover:text-white"
+              }`}
           >
             <List className="w-4 h-4" />
           </button>
@@ -339,10 +339,9 @@ export function CollectionPage() {
             className={`
               flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap
               transition-all duration-200
-              ${
-                selectedType === type
-                  ? "bg-coral text-white"
-                  : "bg-dark-800 text-dark-300 hover:bg-dark-700"
+              ${selectedType === type
+                ? "bg-coral text-white"
+                : "bg-dark-800 text-dark-300 hover:bg-dark-700"
               }
             `}
           >

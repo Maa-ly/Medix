@@ -1,12 +1,13 @@
 import { useEffect, useCallback } from "react";
 import { useAppStore } from "@/store/useAppStore";
-import { useAccount } from "wagmi";
+import { useAccount, useReconnect } from "wagmi";
 import {
   SessionData,
   sendSessionToExtension,
   listenForExtensionSession,
   requestSessionFromExtension,
   getSessionFromStorage,
+  getSessionFromChromeStorage,
   isExtension,
   MESSAGE_TYPES,
 } from "@/services/extensionBridge";
@@ -24,6 +25,7 @@ import {
  */
 export function useExtensionSync() {
   const { address, isConnected: wagmiIsConnected } = useAccount();
+  const { reconnect } = useReconnect();
   const {
     isConnected,
     authMethod,
@@ -31,6 +33,7 @@ export function useExtensionSync() {
     setAuthMethod,
     setWalletAddress,
     setAddress,
+    setConnecting,
   } = useAppStore();
 
   // Apply session data to app state
@@ -40,16 +43,21 @@ export function useExtensionSync() {
         console.log("[useExtensionSync] Applying session data:", sessionData);
         setConnected(true);
         setAuthMethod(sessionData.authMethod);
-        if (address) {
-          setWalletAddress(address);
+
+        // Use address from session data, not from wagmi (which might not be connected yet in extension)
+        const addr = sessionData.currentAccount?.address || (sessionData as any)?.walletAddress || null;
+        if (addr) {
+          setWalletAddress(addr);
+          setAddress(addr);
         }
       }
     },
-    [setConnected, setAuthMethod, setWalletAddress, address]
+    [setConnected, setAuthMethod, setWalletAddress, setAddress]
   );
 
   // Sync wagmi connection state with store
   useEffect(() => {
+    if (isExtension()) return;
     if (wagmiIsConnected && address) {
       setConnected(true);
       setAddress(address);
@@ -67,16 +75,20 @@ export function useExtensionSync() {
     // Don't sync from extension to itself
     if (isExtension()) return;
 
+    // Use wagmi connection state as source of truth
     const sessionData: SessionData = {
-      isConnected,
-      authMethod,
+      isConnected: wagmiIsConnected,  // Use wagmi state, not store state
+      authMethod: wagmiIsConnected ? (authMethod || "walletconnect") : authMethod,
       currentAccount: address ? { address, network: "lisk-sepolia" } : null,
       timestamp: Date.now(),
     };
 
-    // Send session to extension
-    sendSessionToExtension(sessionData);
-  }, [isConnected, authMethod, address]);
+    // Only send if there's meaningful data
+    if (wagmiIsConnected && address) {
+      console.log("[useExtensionSync] Syncing session to extension:", sessionData);
+      sendSessionToExtension(sessionData);
+    }
+  }, [wagmiIsConnected, authMethod, address]);
 
   // On initial load, try to get session from extension or storage
   useEffect(() => {
@@ -86,9 +98,37 @@ export function useExtensionSync() {
 
       // Load initial session
       const loadSession = async () => {
-        const sessionData = await getSessionFromStorage();
-        if (sessionData && sessionData.isConnected) {
-          applySession(sessionData);
+        setConnecting(true);
+        try {
+          const sessionData = await (async () => {
+            const fromChrome = await getSessionFromChromeStorage();
+            if (fromChrome) return fromChrome;
+            return getSessionFromStorage();
+          })();
+          console.log("[useExtensionSync] Loaded session from storage:", sessionData);
+
+          if (sessionData && sessionData.isConnected) {
+            console.log("[useExtensionSync] Found connected session, applying...");
+
+            // Apply session data immediately to show UI
+            applySession(sessionData);
+
+            // Try to reconnect wagmi in background (may fail in extension context)
+            try {
+              await reconnect();
+              console.log("[useExtensionSync] Wagmi reconnected successfully");
+            } catch (reconnectError) {
+              console.log("[useExtensionSync] Wagmi reconnect failed (expected in extension):", reconnectError);
+              // Don't clear session - wagmi reconnect may not work in extension popup
+              // The session data is still valid and UI should show connected state
+            }
+          } else {
+            console.log("[useExtensionSync] No connected session found");
+          }
+        } catch (error) {
+          console.error("[useExtensionSync] Error loading session:", error);
+        } finally {
+          setConnecting(false);
         }
       };
       loadSession();
@@ -128,7 +168,10 @@ export function useExtensionSync() {
       };
     }
 
-    // For web app: check localStorage first
+    // For web app: also set loading state while checking for session
+    setConnecting(true);
+
+    // Check localStorage first
     const storedSession = getSessionFromStorage();
     if (storedSession && storedSession.isConnected && !isConnected) {
       console.log("[useExtensionSync] Loading session from localStorage");
@@ -138,14 +181,24 @@ export function useExtensionSync() {
     // Also request from extension in case it has newer data
     requestSessionFromExtension();
 
+    // Set timeout to stop loading if no session found
+    const loadingTimeout = setTimeout(() => {
+      setConnecting(false);
+    }, 2000); // Give 2 seconds to check for session
+
     // Listen for session from extension
     const cleanup = listenForExtensionSession((sessionData) => {
       if (sessionData.isConnected && !isConnected) {
         applySession(sessionData);
+        setConnecting(false); // Ensure loading state is turned off
+        clearTimeout(loadingTimeout); // Clear timeout if session is found
       }
     });
 
-    return cleanup;
+    return () => {
+      cleanup();
+      clearTimeout(loadingTimeout);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount
 

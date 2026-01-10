@@ -181,11 +181,31 @@ export const useAppStore = create<AppState>()(
       // Toast Actions
       addToast: (toast) => {
         const id = Math.random().toString(36).substring(7);
-        set((state) => ({
-          toasts: [...state.toasts, { ...toast, id }],
-        }));
+        const raw = String(toast.message || "");
+        const msg = (() => {
+          const s = raw.replace(/\s+/g, " ").trim();
+          const lower = s.toLowerCase();
+          if (lower.includes("request took too long") || lower.includes("timed out")) {
+            return "Request timed out. Please try again.";
+          }
+          if (lower.includes("failed to fetch") || lower.includes("network") || lower.includes("econnrefused")) {
+            return "Network error. Please try again.";
+          }
+          if (lower.includes("execution reverted")) {
+            return "Transaction reverted. Please check details.";
+          }
+          const max = 120;
+          return s.length > max ? s.slice(0, max - 1) + "…" : s;
+        })();
 
-        // Auto remove after duration
+        set((state) => {
+          const duplicate = state.toasts.some((t) => t.message === msg && t.type === toast.type);
+          if (duplicate) return state;
+          return {
+            toasts: [...state.toasts, { ...toast, message: msg, id }],
+          };
+        });
+
         setTimeout(() => {
           get().removeToast(id);
         }, toast.duration || 5000);
@@ -213,6 +233,7 @@ export const useAppStore = create<AppState>()(
       name: "medix-storage",
       partialize: (state) => ({
         isConnected: state.isConnected,
+        isConnecting: state.isConnecting,
         authMethod: state.authMethod,
         walletAddress: state.walletAddress,
         joinedAt: state.joinedAt,

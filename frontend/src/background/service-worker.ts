@@ -99,37 +99,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return true;
 
-    case "WEPIN_AUTH_SUCCESS":
-      // Store Wepin session from auth page (NOT VeryChat - that's extension-only)
+    case "WEPIN_AUTH_SUCCESS": {
       const sessionData = message.data;
-
       console.log("[Medix] Wepin auth success from auth page:", {
         authMethod: sessionData.authMethod,
         hasAccounts: !!sessionData.accounts,
       });
 
-      // Store ONLY Wepin sessions from auth page
       if (sessionData.authMethod === "wepin") {
         chrome.storage.local.set({ medix_session: sessionData }, () => {
           console.log("[Medix] Wepin session stored in chrome.storage.local");
-
-          // Notify popup to update UI
           chrome.runtime
             .sendMessage({ type: "SESSION_UPDATED", data: sessionData })
-            .catch(() => {
-              // Ignore if popup not open
-            });
-
+            .catch(() => {});
           sendResponse({ success: true });
         });
       } else {
-        console.warn(
-          "[Medix] Ignoring non-Wepin auth from auth page:",
-          sessionData.authMethod
-        );
+        console.warn("[Medix] Ignoring non-Wepin auth from auth page:", sessionData.authMethod);
         sendResponse({ success: false, error: "Only Wepin auth supported" });
       }
       return true;
+    }
 
     // User data management
     case "GET_USER_DATA":

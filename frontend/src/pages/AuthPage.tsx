@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, CheckCircle2, XCircle, Wallet } from "lucide-react";
-import { useAccount, useConnect } from "wagmi";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { getUserProfile, createOrUpdateUser } from "@/services/backend";
 
 type AuthStatus = "idle" | "connecting" | "success" | "error";
@@ -13,47 +13,29 @@ export default function AuthPage() {
 
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
-
-  useEffect(() => {
-    // Check if we have a pending auth request from the extension
-    const urlParams = new URLSearchParams(window.location.search);
-    const extensionId = urlParams.get("extensionId");
-
-    if (extensionId) {
-      sessionStorage.setItem("pendingExtensionId", extensionId);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Handle successful connection
-    if (isConnected && address && status === "connecting") {
-      handleSuccessfulConnection(address);
-    }
-  }, [isConnected, address]);
-
-  const handleSuccessfulConnection = async (walletAddress: string) => {
+  const { disconnect } = useDisconnect();
+  const handleSuccessfulConnection = useCallback(async (walletAddress: string) => {
     try {
       // Create/update user in backend
-      let backendUser;
+      let _backendUser;
       try {
-        backendUser = await getUserProfile("walletconnect", walletAddress);
+        _backendUser = await getUserProfile("walletconnect", walletAddress);
       } catch {
         // User doesn't exist, create new one
-        backendUser = await createOrUpdateUser({
+        _backendUser = await createOrUpdateUser({
           authId: walletAddress,
           authMethod: "walletconnect",
           profileName: `User ${walletAddress.slice(0, 6)}`,
           walletAddress: walletAddress,
         });
-        backendUser = backendUser.user;
+        _backendUser = _backendUser.user;
       }
 
       // Store session data for extension to pickup
       const sessionData = {
         isConnected: true,
         authMethod: "walletconnect" as const,
-        walletAddress: walletAddress,
-        backendUser: backendUser,
+        currentAccount: { address: walletAddress, network: "lisk-sepolia" },
         timestamp: Date.now(),
       };
 
@@ -99,6 +81,10 @@ export default function AuthPage() {
       window.addEventListener("message", handleAck);
     } catch (error) {
       console.error("WalletConnect auth error:", error);
+
+      // Disconnect to prevent stale session
+      disconnect();
+
       setStatus("error");
       setErrorMessage(
         error instanceof Error
@@ -111,7 +97,29 @@ export default function AuthPage() {
         window.close();
       }, 3000);
     }
-  };
+  }, [disconnect]);
+
+  useEffect(() => {
+    // Check if we have a pending auth request from the extension
+    const urlParams = new URLSearchParams(window.location.search);
+    const extensionId = urlParams.get("extensionId");
+
+    if (extensionId) {
+      sessionStorage.setItem("pendingExtensionId", extensionId);
+    }
+  }, []);
+
+  // NOTE: Removed aggressive session cleanup on mount
+  // The previous cleanup was clearing valid sessions and causing issues
+  // Wagmi handles session management internally
+  // Only disconnect on actual errors, not on mount
+
+  useEffect(() => {
+    if (isConnected && address && status === "connecting") {
+      handleSuccessfulConnection(address);
+    }
+  }, [isConnected, address, status, handleSuccessfulConnection]);
+
 
   const handleWalletConnect = async () => {
     setStatus("connecting");
@@ -127,6 +135,10 @@ export default function AuthPage() {
       await connect({ connector });
     } catch (error) {
       console.error("Connection error:", error);
+
+      // Disconnect to prevent stale session
+      disconnect();
+
       setStatus("error");
       setErrorMessage(
         error instanceof Error
